@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f5f5f7;
+            margin: 0;
+            padding-top: 60px; /* Space for navbar */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: calc(100vh - 60px);
+        }
+        .navbar {
+            width: 100%;
+            background-color: #333;
+            color: white;
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-sizing: border-box;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1000;
+        }
+        .navbar-brand {
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+        .navbar-links a {
+            color: white;
+            text-decoration: none;
+            margin-left: 20px;
+            font-size: 1.1em;
+        }
+        .navbar-links a:hover {
+            text-decoration: underline;
+        }
+        #chat-container {
+            width: 80%;
+            max-width: 800px;
+            height: 90vh;
+            background-color: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        #chat-box {
+            flex-grow: 1;
+            padding: 20px;
+            overflow-y: auto;
+            border-bottom: 1px solid #e5e5e5;
+        }
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+            flex-direction: column;
+        }
+        .message .sender {
+            font-weight: bold;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+            color: #333;
+        }
+        .message .content {
+            padding: 10px 15px;
+            border-radius: 10px;
+            max-width: 80%;
+        }
+        .user-message .content {
+            background-color: #007aff;
+            color: white;
+            align-self: flex-end;
+        }
+        .bot-message .content {
+            background-color: #e5e5ea;
+            color: black;
+            align-self: flex-start;
+        }
+        #input-area {
+            display: flex;
+            padding: 20px;
+        }
+        #query-input {
+            flex-grow: 1;
+            border: 1px solid #d1d1d6;
+            border-radius: 8px;
+            padding: 10px 15px;
+            font-size: 1em;
+            outline: none;
+        }
+        #query-input:focus {
+            border-color: #007aff;
+            box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.2);
+        }
+        #send-button {
+            background-color: #007aff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 20px;
+            margin-left: 10px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+        #send-button:hover {
+            background-color: #005bb5;
+        }
+        #send-button:disabled {
+            background-color: #a0a0a0;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-brand">Language Agnostic Chatbot</div>
+        <div class="navbar-links">
+            <a href="index.html">Chat</a>
+            <a href="upload.html">Upload</a>
+        </div>
+    </nav>
+    <div id="chat-container">
+        <div id="chat-box"></div>
+        <div id="input-area">
+            <input type="text" id="query-input" placeholder="Ask me anything...">
+            <button id="send-button">Send</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const chatBox = document.getElementById('chat-box');
+            const queryInput = document.getElementById('query-input');
+            const sendButton = document.getElementById('send-button');
+
+            const addMessage = (sender, message, isMarkdown = false) => {
+                const messageElement = document.createElement('div');
+                messageElement.classList.add('message', sender === 'user' ? 'user-message' : 'bot-message');
+
+                const senderElement = document.createElement('div');
+                senderElement.classList.add('sender');
+                senderElement.textContent = sender === 'user' ? 'You' : 'Bot';
+                
+                const contentElement = document.createElement('div');
+                contentElement.classList.add('content');
+
+                if (isMarkdown) {
+                    contentElement.innerHTML = marked.parse(message);
+                } else {
+                    contentElement.textContent = message;
+                }
+
+                messageElement.appendChild(senderElement);
+                messageElement.appendChild(contentElement);
+                chatBox.appendChild(messageElement);
+                chatBox.scrollTop = chatBox.scrollHeight;
+                return messageElement;
+            };
+
+            const handleSendQuery = async () => {
+                const query = queryInput.value.trim();
+                if (!query) return;
+
+                addMessage('user', query);
+                queryInput.value = '';
+                sendButton.disabled = true;
+                queryInput.disabled = true;
+
+                const loadingMessage = addMessage('bot', 'Thinking...');
+
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds timeout
+
+                try {
+                    const formData = new FormData();
+                    formData.append('query', query);
+
+                    const response = await fetch('http://localhost:8000/askQuery', {
+                        method: 'POST',
+                        body: formData,
+                        signal: controller.signal,
+                    });
+
+                    clearTimeout(timeoutId);
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    const botResponse = data.Response || 'Sorry, I could not get a response.';
+                    
+                    loadingMessage.querySelector('.content').innerHTML = marked.parse(botResponse);
+
+                } catch (error) {
+                    clearTimeout(timeoutId);
+                    console.error('Error fetching response:', error);
+                    if (error.name === 'AbortError') {
+                        loadingMessage.querySelector('.content').textContent = 'Sorry, the request timed out.';
+                    } else {
+                        loadingMessage.querySelector('.content').textContent = 'Sorry, something went wrong. Please check the console for details.';
+                    }
+                } finally {
+                    sendButton.disabled = false;
+                    queryInput.disabled = false;
+                    queryInput.focus();
+                }
+            };
+
+            sendButton.addEventListener('click', handleSendQuery);
+            queryInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    handleSendQuery();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

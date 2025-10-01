@@ -3,6 +3,7 @@ import shutil
 import time
 from pathlib import Path 
 from fastapi import FastAPI, Form, UploadFile, BackgroundTasks, File
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_qdrant import QdrantVectorStore,Qdrant
@@ -13,6 +14,15 @@ import qdrant_client
 
 load_dotenv()
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+)
+
 Path("docs").mkdir(exist_ok=True)
 
 embedding_model = GoogleGenerativeAIEmbeddings(
@@ -64,7 +74,7 @@ def process_and_index_pdf(save_path: Path):
 
     # 5. Batch processing
     batch_size = 10
-    delay_in_seconds = 60
+    delay_in_seconds = 3
 
     for i in range(0, len(chunks), batch_size):
         batch = chunks[i:i + batch_size]
